@@ -18,6 +18,7 @@ public sealed partial class Couple : IModSharpModule, IClientListener, IGameList
     private readonly IClientManager _clients;
     private readonly ILogger<Couple> _logger;
     private readonly IModSharp _modSharp;
+    private readonly ISharedSystem _sharedSystem;
 
     private readonly Dictionary<ulong, User> _users = new();
 
@@ -35,6 +36,7 @@ public sealed partial class Couple : IModSharpModule, IClientListener, IGameList
         bool hotReload)
     {
         _configuration = coreConfiguration;
+        _sharedSystem = sharedSystem;
         _logger = sharedSystem.GetLoggerFactory().CreateLogger<Couple>();
         _modSharp = sharedSystem.GetModSharp();
         _clients = sharedSystem.GetClientManager();
@@ -51,9 +53,6 @@ public sealed partial class Couple : IModSharpModule, IClientListener, IGameList
         _modSharp.InstallGameListener(this);
 
         _clients.InstallCommandCallback("cp", PartnerInviteRequest);
-        _clients.InstallCommandCallback("bc", BreakUpCouple);
-        _clients.InstallCommandCallback("cptp", TeleportCouple);
-        _clients.InstallCommandCallback("cptp2", TeleportCoupleToMe);
 
         _statusTimer = _modSharp.PushTimer(TimerUpdate, 1.0, GameTimerFlags.Repeatable | GameTimerFlags.StopOnMapEnd);
         _databaseRetryTimer = _modSharp.PushTimer(TryReconnectDatabase, DatabaseRetryIntervalSeconds, GameTimerFlags.Repeatable);
@@ -64,6 +63,7 @@ public sealed partial class Couple : IModSharpModule, IClientListener, IGameList
 
     public void PostInit()
     {
+        TryResolveWorldTextMenu();
         TryReconnectDatabase();
     }
 
@@ -75,9 +75,6 @@ public sealed partial class Couple : IModSharpModule, IClientListener, IGameList
         StopTimer(ref _databaseRetryTimer);
 
         _clients.RemoveCommandCallback("cp", PartnerInviteRequest);
-        _clients.RemoveCommandCallback("bc", BreakUpCouple);
-        _clients.RemoveCommandCallback("cptp", TeleportCouple);
-        _clients.RemoveCommandCallback("cptp2", TeleportCoupleToMe);
         _clients.RemoveClientListener(this);
         _modSharp.RemoveGameListener(this);
 
@@ -86,11 +83,13 @@ public sealed partial class Couple : IModSharpModule, IClientListener, IGameList
 
     public void OnAllModulesLoaded()
     {
+        TryResolveWorldTextMenu(logFailure: true);
         TryReconnectDatabase();
     }
 
     public void OnLibraryConnected(string name)
     {
+        TryResolveWorldTextMenu();
     }
 
     public void OnLibraryDisconnect(string name)

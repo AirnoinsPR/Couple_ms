@@ -8,7 +8,7 @@ namespace Ins.Couple;
 
 public sealed partial class Couple
 {
-    private ECommandAction BreakUpCouple(IGameClient client, StringCommand command)
+    private ECommandAction StartBreakup(IGameClient client)
     {
         if (!IsValidClient(client) || !_isDbConnected)
         {
@@ -34,62 +34,26 @@ public sealed partial class Couple
             return ECommandAction.Handled;
         }
 
-        if (!_users.TryGetValue(user.SpouseSteamID, out var targetUser))
+        if (!_users.TryGetValue(user.SpouseSteamID, out _))
         {
             Reply(client, "未知错误,请联系管理员");
             return ECommandAction.Handled;
         }
 
         user.Status = Status.BreakingUp;
+        user.Num = 0;
 
-        const string separator = "---------------------------------------------------------------------";
-        string requestMessage = $"你正在发起分手请求,请在10秒内输入 {ChatColor.Green}yes{ChatColor.White}|{ChatColor.Red}no {ChatColor.White}来确认操作";
-        Chat(client, separator, usePrefix: false);
-        Reply(client, requestMessage);
-        Reply(client, requestMessage);
-        Reply(client, requestMessage);
-        Chat(client, separator, usePrefix: false);
+        if (!ShowBreakupConfirmMenu(client, user))
+        {
+            user.Status = Status.Married;
+            user.Num = 0;
+            Reply(client, $"{ChatColor.Red}CP菜单打开失败,分手已取消");
+        }
 
         return ECommandAction.Handled;
     }
 
-    private ECommandAction TeleportCouple(IGameClient client, StringCommand command)
-    {
-        if (!IsValidClient(client))
-        {
-            return ECommandAction.Handled;
-        }
-
-        if (!_users.TryGetValue(client.SteamId.AsPrimitive(), out var user))
-        {
-            return ECommandAction.Handled;
-        }
-
-        if (user.SpouseSteamID == 0)
-        {
-            Reply(client, "单身狗用什么cptp");
-            return ECommandAction.Handled;
-        }
-
-        var target = GetClientBySteamId(user.SpouseSteamID);
-        if (!IsValidClient(target))
-        {
-            Reply(client, OfflineSpouseMessage(user, "目前不在线哦"));
-            return ECommandAction.Handled;
-        }
-
-        if (!CanTeleportCouple(client, target!, out string teleportError))
-        {
-            Reply(client, $"{ChatColor.Red}{teleportError}");
-            return ECommandAction.Handled;
-        }
-
-        ChatAll($"{ChatColor.Purple}{client.Name} {ChatColor.White}已传送至 {ChatColor.Purple}{target!.Name}");
-        TeleportPlayer(client, target);
-        return ECommandAction.Handled;
-    }
-
-    private ECommandAction TeleportCoupleToMe(IGameClient client, StringCommand command)
+    private ECommandAction TryTeleportCouple(IGameClient client, bool toMe)
     {
         if (!IsValidClient(client))
         {
@@ -120,12 +84,40 @@ public sealed partial class Couple
             return ECommandAction.Handled;
         }
 
-        ChatAll($"{ChatColor.Purple}{target!.Name} {ChatColor.White}已传送至 {ChatColor.Purple}{client.Name}");
-        TeleportPlayer(client, target, true);
+        if (toMe)
+        {
+            ChatAll($"{ChatColor.Purple}{target!.Name} {ChatColor.White}已传送至 {ChatColor.Purple}{client.Name}");
+            TeleportPlayer(client, target, true);
+        }
+        else
+        {
+            ChatAll($"{ChatColor.Purple}{client.Name} {ChatColor.White}已传送至 {ChatColor.Purple}{target!.Name}");
+            TeleportPlayer(client, target);
+        }
+
         return ECommandAction.Handled;
     }
 
     private ECommandAction PartnerInviteRequest(IGameClient client, StringCommand command)
+    {
+        _ = command;
+
+        if (!IsValidClient(client) || !_isDbConnected)
+        {
+            return ECommandAction.Handled;
+        }
+
+        ulong steamId = client.SteamId.AsPrimitive();
+        if (!_users.TryGetValue(steamId, out var user))
+        {
+            return ECommandAction.Handled;
+        }
+
+        ShowCoupleMenu(client);
+        return ECommandAction.Handled;
+    }
+
+    private ECommandAction StartProposal(IGameClient client, ulong targetSteamId)
     {
         if (!IsValidClient(client) || !_isDbConnected)
         {
@@ -150,12 +142,6 @@ public sealed partial class Couple
             case Status.Married:
                 Reply(client, "你已经有一个伴侣了,不要太花心");
                 return ECommandAction.Handled;
-        }
-
-        if (command.ArgCount < 1 || !ulong.TryParse(command.GetArg(1), out ulong targetSteamId) || targetSteamId == 0)
-        {
-            Reply(client, $"用法: {ChatColor.Green}!cp <steamid64>");
-            return ECommandAction.Handled;
         }
 
         if (steamId == targetSteamId)
@@ -234,13 +220,15 @@ public sealed partial class Couple
                 currentTargetUser.Status = Status.Proposed;
                 currentTargetUser.Num = 0;
 
-                Reply(client, $"你正在向 {ChatColor.Pink}{target.Name} {ChatColor.White}求婚");
-                Chat(target, "---------------------------------------------------------------------", usePrefix: false);
-                string requestMessage = $"{ChatColor.Blue}{client.Name} {ChatColor.White}向你发起了求婚,请在10秒内输入 {ChatColor.Green}yes{ChatColor.White}|{ChatColor.Red}no {ChatColor.White}来进行处理";
-                Chat(target, requestMessage);
-                Chat(target, requestMessage);
-                Chat(target, requestMessage);
-                Chat(target, "---------------------------------------------------------------------", usePrefix: false);
+                if (!ShowProposalResponseMenu(target!, client))
+                {
+                    ResetPendingProposal(currentUser, currentTargetUser);
+                    Reply(client, $"{ChatColor.Red}对方CP菜单打开失败,求婚已取消");
+                    Reply(target!, $"{ChatColor.Red}CP菜单打开失败,求婚已取消");
+                    return;
+                }
+
+                Reply(client, $"已向 {ChatColor.Pink}{target.Name} {ChatColor.White}发起求婚");
             });
         });
 

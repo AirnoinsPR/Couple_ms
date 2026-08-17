@@ -92,7 +92,7 @@ public sealed partial class Couple
         }
 
         connectionString = string.Empty;
-        errorMessage = "未找到数据库连接字符串，请在配置中设置 Couple:ConnectionString / ConnectionStrings:Couple，或设置环境变量 COUPLE_CONNECTION_STRING。";
+        errorMessage = "未找到数据库连接字符串,请在配置中设置 Couple:ConnectionString / ConnectionStrings:Couple,或设置环境变量 COUPLE_CONNECTION_STRING.";
         return false;
     }
 
@@ -110,19 +110,10 @@ public sealed partial class Couple
 
             const string sql = @"
                 INSERT INTO `social_couple` (`steamid_0`, `steamid_1`, `created_at`, `status`)
-                SELECT @steamId0, @steamId1, CURRENT_TIMESTAMP, 1
-                FROM DUAL
-                WHERE EXISTS (
-                    SELECT 1 FROM `player_playtime` WHERE `steamid` = @steamId0Text
-                )
-                  AND EXISTS (
-                    SELECT 1 FROM `player_playtime` WHERE `steamid` = @steamId1Text
-                );";
+                VALUES (@steamId0, @steamId1, CURRENT_TIMESTAMP, 1);";
             await using var cmd = new MySqlCommand(sql, connection);
             cmd.Parameters.AddWithValue("@steamId0", steamId0);
             cmd.Parameters.AddWithValue("@steamId1", steamId1);
-            cmd.Parameters.AddWithValue("@steamId0Text", steamId0.ToString());
-            cmd.Parameters.AddWithValue("@steamId1Text", steamId1.ToString());
             int rowsAffected = await cmd.ExecuteNonQueryAsync();
             if (rowsAffected == 0)
             {
@@ -156,18 +147,10 @@ public sealed partial class Couple
                            `canceled_at` = CURRENT_TIMESTAMP,
                            `cooldown_until` = DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 3 DAY)
                            WHERE (`steamid_0` = @steamId0 AND `steamid_1` = @steamId1 OR `steamid_0` = @steamId1 AND `steamid_1` = @steamId0)
-                           AND `status` = 1
-                           AND EXISTS (
-                               SELECT 1 FROM `player_playtime` WHERE `steamid` = @steamId0Text
-                           )
-                           AND EXISTS (
-                               SELECT 1 FROM `player_playtime` WHERE `steamid` = @steamId1Text
-                           );";
+                           AND `status` = 1;";
             await using var cmd = new MySqlCommand(sql, connection);
             cmd.Parameters.AddWithValue("@steamId0", steamId0);
             cmd.Parameters.AddWithValue("@steamId1", steamId1);
-            cmd.Parameters.AddWithValue("@steamId0Text", steamId0.ToString());
-            cmd.Parameters.AddWithValue("@steamId1Text", steamId1.ToString());
 
             int rowsAffected = await cmd.ExecuteNonQueryAsync();
             if (rowsAffected == 0)
@@ -201,23 +184,11 @@ public sealed partial class Couple
                 ? @"UPDATE `social_couple`
                        SET `id0_lastseen` = CURRENT_TIMESTAMP
                        WHERE (`steamid_0` = @steamId OR `steamid_1` = @steamId)
-                       AND `status` = 1
-                       AND EXISTS (
-                           SELECT 1 FROM `player_playtime` WHERE `steamid` = CAST(`social_couple`.`steamid_0` AS CHAR)
-                       )
-                       AND EXISTS (
-                           SELECT 1 FROM `player_playtime` WHERE `steamid` = CAST(`social_couple`.`steamid_1` AS CHAR)
-                       );"
+                       AND `status` = 1;"
                 : @"UPDATE `social_couple`
                        SET `id1_lastseen` = CURRENT_TIMESTAMP
                        WHERE (`steamid_0` = @steamId OR `steamid_1` = @steamId)
-                       AND `status` = 1
-                       AND EXISTS (
-                           SELECT 1 FROM `player_playtime` WHERE `steamid` = CAST(`social_couple`.`steamid_0` AS CHAR)
-                       )
-                       AND EXISTS (
-                           SELECT 1 FROM `player_playtime` WHERE `steamid` = CAST(`social_couple`.`steamid_1` AS CHAR)
-                       );";
+                       AND `status` = 1;";
 
             await using var cmd = new MySqlCommand(sql, connection);
             cmd.Parameters.AddWithValue("@steamId", steamId);
@@ -247,12 +218,6 @@ public sealed partial class Couple
                 FROM `social_couple`
                 WHERE (`steamid_0` = @steamId OR `steamid_1` = @steamId)
                 AND `status` = 1
-                AND EXISTS (
-                    SELECT 1 FROM `player_playtime` WHERE `steamid` = CAST(`social_couple`.`steamid_0` AS CHAR)
-                )
-                AND EXISTS (
-                    SELECT 1 FROM `player_playtime` WHERE `steamid` = CAST(`social_couple`.`steamid_1` AS CHAR)
-                )
                 LIMIT 1;";
 
             await using var cmd = new MySqlCommand(sql, connection);
@@ -292,13 +257,7 @@ public sealed partial class Couple
                     END AS `spouseGender`
                 FROM `social_couple`
                 WHERE (`steamid_0` = @steamId OR `steamid_1` = @steamId)
-                AND `status` = 1
-                AND EXISTS (
-                    SELECT 1 FROM `player_playtime` WHERE `steamid` = CAST(`social_couple`.`steamid_0` AS CHAR)
-                )
-                AND EXISTS (
-                    SELECT 1 FROM `player_playtime` WHERE `steamid` = CAST(`social_couple`.`steamid_1` AS CHAR)
-                );";
+                AND `status` = 1;";
 
             await using var cmd = new MySqlCommand(sql, connection);
             cmd.Parameters.AddWithValue("@steamId", steamId);
@@ -332,12 +291,6 @@ public sealed partial class Couple
                 FROM `social_couple`
                 WHERE (`steamid_0` = @steamId OR `steamid_1` = @steamId)
                   AND `status` = 0
-                  AND EXISTS (
-                      SELECT 1 FROM `player_playtime` WHERE `steamid` = CAST(`social_couple`.`steamid_0` AS CHAR)
-                  )
-                  AND EXISTS (
-                      SELECT 1 FROM `player_playtime` WHERE `steamid` = CAST(`social_couple`.`steamid_1` AS CHAR)
-                  )
                 ORDER BY `canceled_at` DESC
                 LIMIT 1";
 

@@ -102,25 +102,7 @@ public sealed partial class Couple
         string commandName,
         string message)
     {
-        if (!IsValidClient(client) || string.IsNullOrWhiteSpace(message) || !_isDbConnected)
-        {
-            return ECommandAction.Skipped;
-        }
-
-        ulong steamId = client.SteamId.AsPrimitive();
-        if (!_users.TryGetValue(steamId, out var user))
-        {
-            return ECommandAction.Skipped;
-        }
-
-        string msg = message.Trim().ToLowerInvariant();
-
-        return user.Status switch
-        {
-            Status.Proposed => HandleProposalResponse(client, user, msg),
-            Status.BreakingUp => HandleBreakupResponse(client, user, msg),
-            _ => ECommandAction.Skipped
-        };
+        return ECommandAction.Skipped;
     }
 
     public void OnGameDeactivate()
@@ -155,8 +137,13 @@ public sealed partial class Couple
         };
     }
 
-    private ECommandAction HandleProposalResponse(IGameClient client, User user, string message)
+    private ECommandAction AcceptProposal(IGameClient client)
     {
+        if (!_users.TryGetValue(client.SteamId.AsPrimitive(), out var user) || user.Status != Status.Proposed)
+        {
+            return ECommandAction.Handled;
+        }
+
         var requester = GetClientBySteamId(user.RequesterSteamID);
         if (!IsValidClient(requester))
         {
@@ -170,171 +157,195 @@ public sealed partial class Couple
             return ECommandAction.Handled;
         }
 
-        switch (message)
-        {
-            case "yes":
-                ulong proposedSteamId = client.SteamId.AsPrimitive();
-                ulong requesterSteamId = requester!.SteamId.AsPrimitive();
-                user.Status = Status.ReqSuccess;
-                requesterUser.Status = Status.ReqSuccess;
+        ulong proposedSteamId = client.SteamId.AsPrimitive();
+        ulong requesterSteamId = requester!.SteamId.AsPrimitive();
+        user.Status = Status.ReqSuccess;
+        requesterUser.Status = Status.ReqSuccess;
 
-                Task.Run(async () =>
+        Task.Run(async () =>
+        {
+            bool added = await AddCoupleAsync(proposedSteamId, requesterSteamId);
+            if (added)
+            {
+                await UpdateLastSeenAsync(proposedSteamId, CPSide.Female);
+                await UpdateLastSeenAsync(requesterSteamId, CPSide.Male);
+            }
+
+            _modSharp.InvokeFrameAction(() =>
+            {
+                var proposedClient = GetClientBySteamId(proposedSteamId);
+                var requesterClient = GetClientBySteamId(requesterSteamId);
+
+                if (!added)
                 {
-                    bool added = await AddCoupleAsync(proposedSteamId, requesterSteamId);
-                    if (added)
+                    ResetUsersToNone(proposedSteamId, requesterSteamId);
+
+                    if (IsValidClient(proposedClient))
                     {
-                        await UpdateLastSeenAsync(proposedSteamId, CPSide.Female);
-                        await UpdateLastSeenAsync(requesterSteamId, CPSide.Male);
+                        Chat(proposedClient!, $"{ChatColor.Red}数据库写入失败,求婚未完成");
                     }
 
-                    _modSharp.InvokeFrameAction(() =>
+                    if (IsValidClient(requesterClient))
                     {
-                        var proposedClient = GetClientBySteamId(proposedSteamId);
-                        var requesterClient = GetClientBySteamId(requesterSteamId);
+                        Chat(requesterClient!, $"{ChatColor.Red}数据库写入失败,求婚未完成");
+                    }
 
-                        if (!added)
-                        {
-                            ResetUsersToNone(proposedSteamId, requesterSteamId);
+                    return;
+                }
 
-                            if (IsValidClient(proposedClient))
-                            {
-                                Chat(proposedClient!, $"{ChatColor.Red}数据库写入失败,求婚未完成");
-                            }
+                if (!IsValidClient(proposedClient) || !IsValidClient(requesterClient))
+                {
+                    if (IsValidClient(proposedClient))
+                    {
+                        Chat(proposedClient!, $"{ChatColor.Pink}新婚快乐{ChatColor.White},将在5秒后自动断开,请重新连接至服务器");
+                        ScheduleDisconnect(proposedClient!, proposedSteamId);
+                    }
 
-                            if (IsValidClient(requesterClient))
-                            {
-                                Chat(requesterClient!, $"{ChatColor.Red}数据库写入失败,求婚未完成");
-                            }
+                    if (IsValidClient(requesterClient))
+                    {
+                        Chat(requesterClient!, $"{ChatColor.Pink}新婚快乐{ChatColor.White},将在5秒后自动断开,请重新连接至服务器");
+                        ScheduleDisconnect(requesterClient!, requesterSteamId);
+                    }
 
-                            return;
-                        }
+                    return;
+                }
 
-                        if (!IsValidClient(proposedClient) || !IsValidClient(requesterClient))
-                        {
-                            if (IsValidClient(proposedClient))
-                            {
-                                Chat(proposedClient!, $"{ChatColor.Pink}新婚快乐{ChatColor.White},将在5秒后自动断开,请重新连接至服务器");
-                                ScheduleDisconnect(proposedClient!, proposedSteamId);
-                            }
-
-                            if (IsValidClient(requesterClient))
-                            {
-                                Chat(requesterClient!, $"{ChatColor.Pink}新婚快乐{ChatColor.White},将在5秒后自动断开,请重新连接至服务器");
-                                ScheduleDisconnect(requesterClient!, requesterSteamId);
-                            }
-
-                            return;
-                        }
-
-                        ChatAll($"{ChatColor.Blue}{requesterClient!.Name} {ChatColor.White}向 {ChatColor.Pink}{proposedClient!.Name} {ChatColor.White}求婚成功,恭喜他们结成连理,幸福美满");
-                        Chat(proposedClient, $"{ChatColor.Pink}新婚快乐{ChatColor.White},将在5秒后自动断开,请重新连接至服务器");
-                        Chat(requesterClient, $"{ChatColor.Pink}新婚快乐{ChatColor.White},将在5秒后自动断开,请重新连接至服务器");
-                        SchedulePairDisconnect(proposedClient, requesterClient);
-                    });
-                });
-                return ECommandAction.Handled;
-            case "no":
-                ChatAll($"{ChatColor.Blue}{requester!.Name} {ChatColor.White}向 {ChatColor.Pink}{client.Name} {ChatColor.White}求婚被拒绝,大家快笑他");
-                user.Status = Status.None;
-                user.Num = 0;
-                user.RequesterSteamID = 0;
-                requesterUser.Status = Status.None;
-                return ECommandAction.Handled;
-            default:
-                return ECommandAction.Skipped;
-        }
+                ChatAll($"{ChatColor.Blue}{requesterClient!.Name} {ChatColor.White}向 {ChatColor.Pink}{proposedClient!.Name} {ChatColor.White}求婚成功,恭喜他们结成连理,幸福美满");
+                Chat(proposedClient, $"{ChatColor.Pink}新婚快乐{ChatColor.White},将在5秒后自动断开,请重新连接至服务器");
+                Chat(requesterClient, $"{ChatColor.Pink}新婚快乐{ChatColor.White},将在5秒后自动断开,请重新连接至服务器");
+                SchedulePairDisconnect(proposedClient, requesterClient);
+            });
+        });
+        return ECommandAction.Handled;
     }
 
-    private ECommandAction HandleBreakupResponse(IGameClient client, User user, string message)
+    private ECommandAction RejectProposal(IGameClient client)
     {
-        switch (message)
+        if (!_users.TryGetValue(client.SteamId.AsPrimitive(), out var user) || user.Status != Status.Proposed)
         {
-            case "yes":
-                var target = GetClientBySteamId(user.SpouseSteamID);
-                if (!IsValidClient(target))
-                {
-                    user.Status = Status.Married;
-                    Chat(client, $"{ChatColor.Red}对方已离线或不可用");
-                    return ECommandAction.Handled;
-                }
+            return ECommandAction.Handled;
+        }
 
-                if (!_users.TryGetValue(user.SpouseSteamID, out var targetUser))
-                {
-                    user.Status = Status.Married;
-                    Chat(client, "未知错误,请联系管理员");
-                    return ECommandAction.Handled;
-                }
+        var requester = GetClientBySteamId(user.RequesterSteamID);
+        if (!_users.TryGetValue(user.RequesterSteamID, out var requesterUser))
+        {
+            user.Status = Status.None;
+            user.Num = 0;
+            user.RequesterSteamID = 0;
+            return ECommandAction.Handled;
+        }
 
-                ulong clientSteamId = client.SteamId.AsPrimitive();
-                ulong targetSteamId = target!.SteamId.AsPrimitive();
-                CPSide clientSide = user.CPSide;
-                CPSide targetSide = targetUser.CPSide;
-                user.Status = Status.ReqSuccess;
-                targetUser.Status = Status.ReqSuccess;
+        if (IsValidClient(requester))
+        {
+            ChatAll($"{ChatColor.Blue}{requester!.Name} {ChatColor.White}向 {ChatColor.Pink}{client.Name} {ChatColor.White}求婚被拒绝,大家快笑他");
+        }
 
-                Task.Run(async () =>
+        user.Status = Status.None;
+        user.Num = 0;
+        user.RequesterSteamID = 0;
+        requesterUser.Status = Status.None;
+        requesterUser.Num = 0;
+        requesterUser.RequesterSteamID = 0;
+        return ECommandAction.Handled;
+    }
+
+    private ECommandAction ConfirmBreakup(IGameClient client)
+    {
+        if (!_users.TryGetValue(client.SteamId.AsPrimitive(), out var user) || user.Status != Status.BreakingUp)
+        {
+            return ECommandAction.Handled;
+        }
+
+        var target = GetClientBySteamId(user.SpouseSteamID);
+        if (!IsValidClient(target))
+        {
+            user.Status = Status.Married;
+            Chat(client, $"{ChatColor.Red}对方已离线或不可用");
+            return ECommandAction.Handled;
+        }
+
+        if (!_users.TryGetValue(user.SpouseSteamID, out var targetUser))
+        {
+            user.Status = Status.Married;
+            Chat(client, "未知错误,请联系管理员");
+            return ECommandAction.Handled;
+        }
+
+        ulong clientSteamId = client.SteamId.AsPrimitive();
+        ulong targetSteamId = target!.SteamId.AsPrimitive();
+        CPSide clientSide = user.CPSide;
+        CPSide targetSide = targetUser.CPSide;
+        user.Status = Status.ReqSuccess;
+        targetUser.Status = Status.ReqSuccess;
+
+        Task.Run(async () =>
+        {
+            bool brokenUp = await BreakUpCoupleAsync(clientSteamId, targetSteamId);
+            if (brokenUp)
+            {
+                await UpdateLastSeenAsync(clientSteamId, clientSide);
+                await UpdateLastSeenAsync(targetSteamId, targetSide);
+            }
+
+            _modSharp.InvokeFrameAction(() =>
+            {
+                var currentClient = GetClientBySteamId(clientSteamId);
+                var currentTarget = GetClientBySteamId(targetSteamId);
+
+                if (!brokenUp)
                 {
-                    bool brokenUp = await BreakUpCoupleAsync(clientSteamId, targetSteamId);
-                    if (brokenUp)
+                    RestoreUsersToMarried(clientSteamId, targetSteamId);
+
+                    if (IsValidClient(currentClient))
                     {
-                        await UpdateLastSeenAsync(clientSteamId, clientSide);
-                        await UpdateLastSeenAsync(targetSteamId, targetSide);
+                        Chat(currentClient!, $"{ChatColor.Red}数据库写入失败,分手未完成");
                     }
 
-                    _modSharp.InvokeFrameAction(() =>
+                    if (IsValidClient(currentTarget))
                     {
-                        var currentClient = GetClientBySteamId(clientSteamId);
-                        var currentTarget = GetClientBySteamId(targetSteamId);
+                        Chat(currentTarget!, $"{ChatColor.Red}数据库写入失败,分手未完成");
+                    }
 
-                        if (!brokenUp)
-                        {
-                            RestoreUsersToMarried(clientSteamId, targetSteamId);
+                    return;
+                }
 
-                            if (IsValidClient(currentClient))
-                            {
-                                Chat(currentClient!, $"{ChatColor.Red}数据库写入失败,分手未完成");
-                            }
+                if (!IsValidClient(currentClient) || !IsValidClient(currentTarget))
+                {
+                    if (IsValidClient(currentClient))
+                    {
+                        Chat(currentClient!, $"{ChatColor.Blue}分手已完成{ChatColor.White},将在5秒后自动断开,请重新连接至服务器");
+                        ScheduleDisconnect(currentClient!, clientSteamId);
+                    }
 
-                            if (IsValidClient(currentTarget))
-                            {
-                                Chat(currentTarget!, $"{ChatColor.Red}数据库写入失败,分手未完成");
-                            }
+                    if (IsValidClient(currentTarget))
+                    {
+                        Chat(currentTarget!, $"{ChatColor.Blue}分手已完成{ChatColor.White},将在5秒后自动断开,请重新连接至服务器");
+                        ScheduleDisconnect(currentTarget!, targetSteamId);
+                    }
 
-                            return;
-                        }
+                    return;
+                }
 
-                        if (!IsValidClient(currentClient) || !IsValidClient(currentTarget))
-                        {
-                            if (IsValidClient(currentClient))
-                            {
-                                Chat(currentClient!, $"{ChatColor.Blue}分手已完成{ChatColor.White},将在5秒后自动断开,请重新连接至服务器");
-                                ScheduleDisconnect(currentClient!, clientSteamId);
-                            }
+                ChatAll($"{ChatColor.Purple}{currentClient!.Name} {ChatColor.White}和 {ChatColor.Purple}{currentTarget!.Name} {ChatColor.White}已和平分手,愿各自安好,再遇良人");
+                Chat(currentClient, $"{ChatColor.Blue}分手已完成{ChatColor.White},将在5秒后自动断开,请重新连接至服务器");
+                Chat(currentTarget, $"{ChatColor.Blue}分手已完成{ChatColor.White},将在5秒后自动断开,请重新连接至服务器");
+                SchedulePairDisconnect(currentClient, currentTarget);
+            });
+        });
+        return ECommandAction.Handled;
+    }
 
-                            if (IsValidClient(currentTarget))
-                            {
-                                Chat(currentTarget!, $"{ChatColor.Blue}分手快乐{ChatColor.White},将在5秒后自动断开,请重新连接至服务器");
-                                ScheduleDisconnect(currentTarget!, targetSteamId);
-                            }
-
-                            return;
-                        }
-
-                        ChatAll($"{ChatColor.Purple}{currentClient!.Name} {ChatColor.White}和 {ChatColor.Purple}{currentTarget!.Name} {ChatColor.White}已和平分手,愿各自安好,再遇良人");
-                        Chat(currentClient, $"{ChatColor.Blue}分手快乐{ChatColor.White},将在5秒后自动断开,请重新连接至服务器");
-                        Chat(currentTarget, $"{ChatColor.Blue}分手快乐{ChatColor.White},将在5秒后自动断开,请重新连接至服务器");
-                        SchedulePairDisconnect(currentClient, currentTarget);
-                    });
-                });
-                return ECommandAction.Handled;
-            case "no":
-                user.Status = Status.Married;
-                user.Num = 0;
-                Chat(client, "操作取消");
-                return ECommandAction.Handled;
-            default:
-                return ECommandAction.Skipped;
+    private ECommandAction CancelBreakup(IGameClient client)
+    {
+        if (!_users.TryGetValue(client.SteamId.AsPrimitive(), out var user) || user.Status != Status.BreakingUp)
+        {
+            return ECommandAction.Handled;
         }
+
+        user.Status = Status.Married;
+        user.Num = 0;
+        Chat(client, "操作取消");
+        return ECommandAction.Handled;
     }
 
     private void SchedulePairDisconnect(IGameClient client, IGameClient target)
