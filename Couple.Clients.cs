@@ -14,6 +14,11 @@ public sealed partial class Couple
             return;
         }
 
+        LoadClientUser(client, notifyPresence: true);
+    }
+
+    private void LoadClientUser(IGameClient client, bool notifyPresence)
+    {
         ulong steamId = client.SteamId.AsPrimitive();
 
         Task.Run(async () =>
@@ -22,7 +27,7 @@ public sealed partial class Couple
 
             _modSharp.InvokeFrameAction(() =>
             {
-                if (!_isLoaded || !client.IsValid)
+                if (!_isLoaded || !_isDbConnected || !IsValidClient(client))
                 {
                     return;
                 }
@@ -31,7 +36,21 @@ public sealed partial class Couple
             });
         });
 
-        PushTimer(() => NotifySpousePresence(steamId), 7.0);
+        if (notifyPresence)
+        {
+            PushTimer(() => NotifySpousePresence(steamId), 7.0);
+        }
+    }
+
+    private void ReloadOnlineUsers()
+    {
+        foreach (var client in _clients.GetGameClients(true))
+        {
+            if (IsValidClient(client))
+            {
+                LoadClientUser(client, notifyPresence: false);
+            }
+        }
     }
 
     public void OnClientDisconnected(IGameClient client, NetworkDisconnectionReason reason)

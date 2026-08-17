@@ -78,6 +78,12 @@ public sealed partial class Couple
             return ECommandAction.Handled;
         }
 
+        if (!CanTeleportCouple(client, target!, out string teleportError))
+        {
+            Reply(client, $"{ChatColor.Red}{teleportError}");
+            return ECommandAction.Handled;
+        }
+
         ChatAll($"{ChatColor.Purple}{client.Name} {ChatColor.White}已传送至 {ChatColor.Purple}{target!.Name}");
         TeleportPlayer(client, target);
         return ECommandAction.Handled;
@@ -105,6 +111,12 @@ public sealed partial class Couple
         if (!IsValidClient(target))
         {
             Reply(client, OfflineSpouseMessage(user, "目前不在线哦"));
+            return ECommandAction.Handled;
+        }
+
+        if (!CanTeleportCouple(client, target!, out string teleportError))
+        {
+            Reply(client, $"{ChatColor.Red}{teleportError}");
             return ECommandAction.Handled;
         }
 

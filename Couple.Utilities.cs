@@ -47,6 +47,26 @@ public sealed partial class Couple
         return steamId != 0;
     }
 
+    private static bool CanTeleportCouple(IGameClient client, IGameClient target, out string errorMessage)
+    {
+        var clientPawn = client.GetPlayerController()?.GetPlayerPawn();
+        if (clientPawn is not { IsValidEntity: true, IsAlive: true })
+        {
+            errorMessage = "你死亡时无法传送";
+            return false;
+        }
+
+        var targetPawn = target.GetPlayerController()?.GetPlayerPawn();
+        if (targetPawn is not { IsValidEntity: true, IsAlive: true })
+        {
+            errorMessage = "对方死亡时无法传送";
+            return false;
+        }
+
+        errorMessage = string.Empty;
+        return true;
+    }
+
     private static void ResetPendingProposal(User requester, User proposed)
     {
         requester.Status = Status.None;

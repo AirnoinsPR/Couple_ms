@@ -22,6 +22,7 @@ public sealed partial class Couple
             await CreateTable(connection);
             _isDbConnected = true;
             Echo("数据库已连接成功");
+            _modSharp.InvokeFrameAction(ReloadOnlineUsers);
         }
         catch (Exception ex)
         {
