@@ -19,7 +19,7 @@ public sealed partial class Couple
                 continue;
             }
 
-            if (user.Status is not (Status.Proposed or Status.BreakingUp))
+            if (user.Status is not (Status.Proposed or Status.BreakingUp or Status.PendingProposal))
             {
                 continue;
             }
@@ -32,7 +32,7 @@ public sealed partial class Couple
                     continue;
                 }
 
-                if (user.Status == Status.Proposed)
+                if (user.Status is Status.Proposed or Status.PendingProposal)
                 {
                     var requester = GetClientBySteamId(user.RequesterSteamID);
                     if (IsValidClient(requester) && _users.TryGetValue(user.RequesterSteamID, out var requesterUser))

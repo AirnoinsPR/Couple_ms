@@ -170,12 +170,19 @@ public sealed partial class Couple
             case Status.Requester:
             case Status.Proposed:
             case Status.ReqSuccess:
+            case Status.PendingProposal:
                 Reply(client, "对方当前处于思考状态,无法进行求婚");
                 return ECommandAction.Handled;
             case Status.Married:
                 Reply(client, "对方已经有心上人了,无法进行求婚");
                 return ECommandAction.Handled;
         }
+
+        user.Status = Status.Requester;
+        user.Num = 0;
+        targetUser.Status = Status.PendingProposal;
+        targetUser.RequesterSteamID = steamId;
+        targetUser.Num = 0;
 
         Task.Run(async () =>
         {
@@ -189,21 +196,31 @@ public sealed partial class Couple
                     return;
                 }
 
+                if (!_users.TryGetValue(steamId, out var currentUser)
+                    || !_users.TryGetValue(targetSteamId, out var currentTargetUser)
+                    || currentUser.Status != Status.Requester
+                    || currentTargetUser.Status != Status.PendingProposal
+                    || currentTargetUser.RequesterSteamID != steamId)
+                {
+                    return;
+                }
+
                 if (!canMe)
                 {
+                    ResetPendingProposal(currentUser, currentTargetUser);
                     Reply(client, "你当前处于分手冷静期,无法进行求婚");
                     return;
                 }
 
                 if (!canOther)
                 {
+                    ResetPendingProposal(currentUser, currentTargetUser);
                     Reply(client, "对方当前处于分手冷静期,无法进行求婚");
                     return;
                 }
 
-                user.Status = Status.Requester;
-                targetUser.Status = Status.Proposed;
-                targetUser.RequesterSteamID = steamId;
+                currentTargetUser.Status = Status.Proposed;
+                currentTargetUser.Num = 0;
 
                 Reply(client, $"你正在向 {ChatColor.Pink}{target.Name} {ChatColor.White}求婚");
                 Chat(target, "---------------------------------------------------------------------", usePrefix: false);

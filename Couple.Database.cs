@@ -95,11 +95,11 @@ public sealed partial class Couple
         return false;
     }
 
-    private async Task AddCoupleAsync(ulong steamId0, ulong steamId1)
+    private async Task<bool> AddCoupleAsync(ulong steamId0, ulong steamId1)
     {
         if (!CanPersistPlayer(steamId0) || !CanPersistPlayer(steamId1))
         {
-            return;
+            return false;
         }
 
         try
@@ -122,19 +122,27 @@ public sealed partial class Couple
             cmd.Parameters.AddWithValue("@steamId1", steamId1);
             cmd.Parameters.AddWithValue("@steamId0Text", steamId0.ToString());
             cmd.Parameters.AddWithValue("@steamId1Text", steamId1.ToString());
-            await cmd.ExecuteNonQueryAsync();
+            int rowsAffected = await cmd.ExecuteNonQueryAsync();
+            if (rowsAffected == 0)
+            {
+                EchoWarning("No eligible players found to add a couple.");
+                return false;
+            }
+
+            return true;
         }
         catch (Exception ex)
         {
             EchoWarning($"Error when adding a couple: {ex.Message}");
+            return false;
         }
     }
 
-    private async Task BreakUpCoupleAsync(ulong steamId0, ulong steamId1)
+    private async Task<bool> BreakUpCoupleAsync(ulong steamId0, ulong steamId1)
     {
         if (!CanPersistPlayer(steamId0) || !CanPersistPlayer(steamId1))
         {
-            return;
+            return false;
         }
 
         try
@@ -164,11 +172,15 @@ public sealed partial class Couple
             if (rowsAffected == 0)
             {
                 EchoWarning("No active relationship found to break up.");
+                return false;
             }
+
+            return true;
         }
         catch (Exception ex)
         {
             EchoWarning($"Error when breaking up a couple: {ex.Message}");
+            return false;
         }
     }
 

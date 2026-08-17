@@ -47,6 +47,64 @@ public sealed partial class Couple
         return steamId != 0;
     }
 
+    private static void ResetPendingProposal(User requester, User proposed)
+    {
+        requester.Status = Status.None;
+        requester.RequesterSteamID = 0;
+        requester.Num = 0;
+
+        proposed.Status = Status.None;
+        proposed.RequesterSteamID = 0;
+        proposed.Num = 0;
+    }
+
+    private void ResetRequester(ulong requesterSteamId)
+    {
+        if (requesterSteamId == 0 || !_users.TryGetValue(requesterSteamId, out var requester))
+        {
+            return;
+        }
+
+        requester.Status = Status.None;
+        requester.RequesterSteamID = 0;
+        requester.Num = 0;
+    }
+
+    private void ResetUsersToNone(ulong steamId0, ulong steamId1)
+    {
+        ResetUserToNone(steamId0);
+        ResetUserToNone(steamId1);
+    }
+
+    private void ResetUserToNone(ulong steamId)
+    {
+        if (!_users.TryGetValue(steamId, out var user))
+        {
+            return;
+        }
+
+        user.Status = Status.None;
+        user.RequesterSteamID = 0;
+        user.Num = 0;
+    }
+
+    private void RestoreUsersToMarried(ulong steamId0, ulong steamId1)
+    {
+        RestoreUserToMarried(steamId0);
+        RestoreUserToMarried(steamId1);
+    }
+
+    private void RestoreUserToMarried(ulong steamId)
+    {
+        if (!_users.TryGetValue(steamId, out var user))
+        {
+            return;
+        }
+
+        user.Status = Status.Married;
+        user.Num = 0;
+    }
+
     private void TeleportPlayer(IGameClient client, IGameClient target, bool toMe = false)
     {
         var clientPawn = client.GetPlayerController()?.GetPlayerPawn();
@@ -145,6 +203,19 @@ public sealed partial class Couple
     private void PushTimer(Action action, double delay)
     {
         _modSharp.PushTimer(action, delay, GameTimerFlags.StopOnMapEnd);
+    }
+
+    private void ScheduleDisconnect(IGameClient client, ulong steamId)
+    {
+        PushTimer(() =>
+        {
+            _users.Remove(steamId);
+
+            if (client.IsValid)
+            {
+                _clients.KickClient(client, "Couple status changed", NetworkDisconnectionReason.Kicked);
+            }
+        }, 5.0);
     }
 
     private void StopTimer(ref Guid timer)

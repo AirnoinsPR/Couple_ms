@@ -20,7 +20,8 @@ public sealed partial class Couple
         Proposed = 2,
         Married = 3,
         ReqSuccess = 4,
-        BreakingUp = 5
+        BreakingUp = 5,
+        PendingProposal = 6
     }
 
     private enum CPSide
