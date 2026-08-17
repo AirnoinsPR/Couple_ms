@@ -103,7 +103,7 @@ public sealed partial class Couple
 
         if (user.SpouseSteamID == 0)
         {
-            Reply(client, "单身狗用什么cptp");
+            Reply(client, "你目前还没有伴侣...");
             return ECommandAction.Handled;
         }
 
