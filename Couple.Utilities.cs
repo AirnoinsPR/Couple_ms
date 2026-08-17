@@ -10,7 +10,7 @@ namespace Ins.Couple;
 
 public sealed partial class Couple
 {
-    private static readonly string ChatPrefix = $"{ChatColor.Purple}[{Tag}]{ChatColor.White} ";
+    private static readonly string ChatPrefix = $" {ChatColor.Purple}[{Tag}]{ChatColor.White} ";
 
     private static bool IsValidClient(IGameClient? client)
     {
@@ -250,7 +250,7 @@ public sealed partial class Couple
 
     private void Chat(IGameClient client, string message, bool usePrefix = true)
     {
-        client.Print(HudPrintChannel.Chat, usePrefix ? ChatPrefix + message : message, string.Empty, string.Empty, string.Empty, string.Empty);
+        client.Print(HudPrintChannel.Chat, ChatPrefix + message);
     }
 
     private void Reply(IGameClient client, string message)
