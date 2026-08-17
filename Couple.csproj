@@ -1,0 +1,57 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>disable</ImplicitUsings>
+        <LangVersion>13</LangVersion>
+        <Nullable>enable</Nullable>
+        <AssemblyName>Couple</AssemblyName>
+        <Version>1.0</Version>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <PlatformTarget>x64</PlatformTarget>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+        <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+        <CheckForOverflowUnderflow>True</CheckForOverflowUnderflow>
+        <DebugSymbols>true</DebugSymbols>
+        <DebugType>embedded</DebugType>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <BuildDateTime>$([System.DateTime]::Now.ToString("yyyy-MM-dd HH:mm:ss"))</BuildDateTime>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+        <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+        <CheckForOverflowUnderflow>True</CheckForOverflowUnderflow>
+        <DebugSymbols>true</DebugSymbols>
+        <DebugType>embedded</DebugType>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Remove="obj\**" />
+        <EmbeddedResource Remove="obj\**" />
+        <None Remove="obj\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+            <_Parameter1>BuildTime</_Parameter1>
+            <_Parameter2>$(BuildDateTime)</_Parameter2>
+        </AssemblyAttribute>
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="ModSharp.Sharp.Shared" Version="2.1.137" PrivateAssets="all" />
+      <PackageReference Include="MySqlConnector" Version="2.5.0" GeneratePathProperty="true" />
+    </ItemGroup>
+
+    <Target Name="CopyPluginDependencies" AfterTargets="Build">
+        <ItemGroup>
+            <PluginDependencyDll Include="$(PkgMySqlConnector)\lib\net10.0\MySqlConnector.dll" Condition="Exists('$(PkgMySqlConnector)\lib\net10.0\MySqlConnector.dll')" />
+        </ItemGroup>
+        <Copy SourceFiles="@(PluginDependencyDll)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+    </Target>
+
+</Project>
