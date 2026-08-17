@@ -183,10 +183,10 @@ public sealed partial class Couple
             case Status.Proposed:
             case Status.ReqSuccess:
             case Status.PendingProposal:
-                Reply(client, "对方当前处于思考状态,无法进行求婚");
+                Reply(client, "对方当前有待处理请求,无法发起求婚");
                 return ECommandAction.Handled;
             case Status.Married:
-                Reply(client, "对方已经有心上人了,无法进行求婚");
+                Reply(client, "对方已经有心上人了,无法发起求婚");
                 return ECommandAction.Handled;
         }
 

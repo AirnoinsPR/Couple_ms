@@ -160,13 +160,13 @@ public sealed partial class Couple
         var requester = GetClientBySteamId(user.RequesterSteamID);
         if (!IsValidClient(requester))
         {
-            Chat(client, "目标失效或离线");
+            Chat(client, "对方已离线或不可用");
             return ECommandAction.Handled;
         }
 
         if (!_users.TryGetValue(user.RequesterSteamID, out var requesterUser))
         {
-            Chat(client, "目标失效或离线");
+            Chat(client, "对方已离线或不可用");
             return ECommandAction.Handled;
         }
 
@@ -254,7 +254,7 @@ public sealed partial class Couple
                 if (!IsValidClient(target))
                 {
                     user.Status = Status.Married;
-                    Chat(client, $"{ChatColor.Red}目标离线");
+                    Chat(client, $"{ChatColor.Red}对方已离线或不可用");
                     return ECommandAction.Handled;
                 }
 
@@ -307,7 +307,7 @@ public sealed partial class Couple
                         {
                             if (IsValidClient(currentClient))
                             {
-                                Chat(currentClient!, $"{ChatColor.Blue}分手快乐{ChatColor.White},将在5秒后自动断开,请重新连接至服务器");
+                                Chat(currentClient!, $"{ChatColor.Blue}分手已完成{ChatColor.White},将在5秒后自动断开,请重新连接至服务器");
                                 ScheduleDisconnect(currentClient!, clientSteamId);
                             }
 
