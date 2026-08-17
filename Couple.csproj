@@ -45,6 +45,7 @@
     <ItemGroup>
       <PackageReference Include="ModSharp.Sharp.Shared" Version="2.1.137" PrivateAssets="all" />
       <PackageReference Include="MySqlConnector" Version="2.5.0" GeneratePathProperty="true" />
+	  <ProjectReference Include="..\WorldTextMenu.Shared\WorldTextMenu.Shared.csproj" Private="false" />
     </ItemGroup>
 
     <Target Name="CopyPluginDependencies" AfterTargets="Build">
