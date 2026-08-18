@@ -199,13 +199,16 @@ public sealed partial class Couple
 
     private void KickPlayer(IGameClient client, ulong steamId, double num)
     {
+        _ = client;
+
         PushTimer(() =>
         {
             _users.Remove(steamId);
 
-            if (client.IsValid)
+            var currentClient = GetClientBySteamId(steamId);
+            if (IsValidClient(currentClient))
             {
-                _clients.KickClient(client, "Couple status changed", NetworkDisconnectionReason.Kicked);
+                _clients.KickClient(currentClient!, "Couple status changed", NetworkDisconnectionReason.Kicked);
             }
         }, num);
     }

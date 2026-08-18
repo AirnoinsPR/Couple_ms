@@ -34,6 +34,7 @@ public sealed partial class Couple
                     break;
                 case Status.BreakingUp:
                     RestoreUserToMarried(user.SteamID);
+                    RestoreUserToMarried(user.SpouseSteamID);
                     if (IsValidClient(client))
                     {
                         Chat(client!, $"{ChatColor.Red}请求超时");

@@ -199,7 +199,7 @@ public sealed partial class Couple
 
             _modSharp.InvokeFrameAction(() =>
             {
-                if (!_isLoaded || !client.IsValid || target is not { IsValid: true })
+                if (!_isLoaded)
                 {
                     return;
                 }
@@ -210,6 +210,17 @@ public sealed partial class Couple
                     || currentTargetUser.Status != Status.PendingProposal
                     || currentTargetUser.RequesterSteamID != steamId)
                 {
+                    return;
+                }
+
+                if (!IsValidClient(client) || !IsValidClient(target))
+                {
+                    ResetPendingProposal(currentUser, currentTargetUser);
+                    if (IsValidClient(client))
+                    {
+                        Chat(client, $"{ChatColor.Red}对方已离线或不可用,求婚已取消");
+                    }
+
                     return;
                 }
 
@@ -245,7 +256,7 @@ public sealed partial class Couple
                     return;
                 }
 
-                Chat(client, $"已向 {ChatColor.Pink}{target.Name} {ChatColor.White}发起求婚");
+                Chat(client, $"已向 {ChatColor.Pink}{target!.Name} {ChatColor.White}发起求婚");
             });
         });
 
