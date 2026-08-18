@@ -239,12 +239,10 @@ public sealed partial class Couple
     private void Echo(string message)
     {
         _logger.LogInformation("{Message}", message);
-        _modSharp.LogMessage(message);
     }
 
     private void EchoWarning(string message)
     {
         _logger.LogWarning("{Message}", message);
-        _modSharp.LogWarning(message);
     }
 }
