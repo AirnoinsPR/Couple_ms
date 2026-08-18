@@ -23,7 +23,7 @@ public sealed partial class Couple
 
         Task.Run(async () =>
         {
-            var data = await GetSpouseSteamIdAndGenderAsync(steamId);
+            ulong? spouseSteamId = await GetSpouseSteamIdAsync(steamId);
 
             _modSharp.InvokeFrameAction(() =>
             {
@@ -32,7 +32,7 @@ public sealed partial class Couple
                     return;
                 }
 
-                _users[steamId] = BuildUser(steamId, data);
+                _users[steamId] = BuildUser(steamId, spouseSteamId);
             });
         });
 
@@ -70,7 +70,7 @@ public sealed partial class Couple
             return;
         }
 
-        Task.Run(async () => await UpdateLastSeenAsync(steamId, user.CPSide));
+        Task.Run(async () => await UpdateLastSeenAsync(steamId));
         _users.Remove(steamId);
     }
 
@@ -107,9 +107,9 @@ public sealed partial class Couple
         _users.Clear();
     }
 
-    private User BuildUser(ulong steamId, (ulong? spouseSteamId, string? spouseGender) data)
+    private User BuildUser(ulong steamId, ulong? spouseSteamId)
     {
-        if (!IsSpouseDataValid(data))
+        if (!IsSpouseDataValid(spouseSteamId))
         {
             return new User
             {
@@ -117,20 +117,11 @@ public sealed partial class Couple
             };
         }
 
-        CPSide side = data.spouseGender switch
-        {
-            "老婆" => CPSide.Male,
-            "老公" => CPSide.Female,
-            _ => CPSide.Female
-        };
-
         return new User
         {
             SteamID = steamId,
-            SpouseSteamID = data.spouseSteamId!.Value,
-            SpouseTitle = data.spouseGender!,
-            Status = Status.Married,
-            CPSide = side
+            SpouseSteamID = spouseSteamId!.Value,
+            Status = Status.Married
         };
     }
 
@@ -164,8 +155,8 @@ public sealed partial class Couple
             bool added = await AddCoupleAsync(proposedSteamId, requesterSteamId);
             if (added)
             {
-                await UpdateLastSeenAsync(proposedSteamId, CPSide.Female);
-                await UpdateLastSeenAsync(requesterSteamId, CPSide.Male);
+                await UpdateLastSeenAsync(proposedSteamId);
+                await UpdateLastSeenAsync(requesterSteamId);
             }
 
             _modSharp.InvokeFrameAction(() =>

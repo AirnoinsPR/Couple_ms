@@ -39,13 +39,13 @@ public sealed partial class Couple
             await using var cmd = new MySqlCommand(
                 @"CREATE TABLE IF NOT EXISTS `social_couple` (
                 `id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '记录每一次组CP的ID',
-                `steamid_0` BIGINT UNSIGNED NOT NULL COMMENT '女方',
-                `steamid_1` BIGINT UNSIGNED NOT NULL COMMENT '男方',
+                `steamid_0` BIGINT UNSIGNED NOT NULL COMMENT '玩家0',
+                `steamid_1` BIGINT UNSIGNED NOT NULL COMMENT '玩家1',
                 `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '登记时间',
                 `canceled_at` TIMESTAMP NULL DEFAULT NULL COMMENT '分手时间,未分手时为空',
                 `status` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1: 热恋中; 0: 分手',
-                `id0_lastseen` TIMESTAMP NULL DEFAULT NULL COMMENT '女方上次游玩时间',
-                `id1_lastseen` TIMESTAMP NULL DEFAULT NULL COMMENT '男方上次游玩时间',
+                `id0_lastseen` TIMESTAMP NULL DEFAULT NULL COMMENT '玩家0上次游玩时间',
+                `id1_lastseen` TIMESTAMP NULL DEFAULT NULL COMMENT '玩家1上次游玩时间',
                 `cooldown_until` TIMESTAMP NULL DEFAULT NULL COMMENT '冷静期结束时间'
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;", connection);
             await cmd.ExecuteNonQueryAsync();
@@ -179,7 +179,7 @@ public sealed partial class Couple
         }
     }
 
-    private async Task UpdateLastSeenAsync(ulong steamId, CPSide side)
+    private async Task UpdateLastSeenAsync(ulong steamId)
     {
         if (!CanPersistPlayer(steamId))
         {
@@ -191,15 +191,18 @@ public sealed partial class Couple
             await using var connection = GetConnection();
             await connection.OpenAsync();
 
-            string sql = side == CPSide.Female
-                ? @"UPDATE `social_couple`
-                       SET `id0_lastseen` = CURRENT_TIMESTAMP
-                       WHERE (`steamid_0` = @steamId OR `steamid_1` = @steamId)
-                       AND `status` = 1;"
-                : @"UPDATE `social_couple`
-                       SET `id1_lastseen` = CURRENT_TIMESTAMP
-                       WHERE (`steamid_0` = @steamId OR `steamid_1` = @steamId)
-                       AND `status` = 1;";
+            const string sql = @"
+                UPDATE `social_couple`
+                SET `id0_lastseen` = CASE
+                        WHEN `steamid_0` = @steamId THEN CURRENT_TIMESTAMP
+                        ELSE `id0_lastseen`
+                    END,
+                    `id1_lastseen` = CASE
+                        WHEN `steamid_1` = @steamId THEN CURRENT_TIMESTAMP
+                        ELSE `id1_lastseen`
+                    END
+                WHERE (`steamid_0` = @steamId OR `steamid_1` = @steamId)
+                AND `status` = 1;";
 
             await using var cmd = new MySqlCommand(sql, connection);
             cmd.Parameters.AddWithValue("@steamId", steamId);
@@ -216,16 +219,18 @@ public sealed partial class Couple
         }
     }
 
-    private async Task<DateTime?> GetLastSeenAsync(ulong steamId, CPSide side)
+    private async Task<DateTime?> GetSpouseLastSeenAsync(ulong steamId)
     {
         try
         {
             await using var connection = GetConnection();
             await connection.OpenAsync();
 
-            string columnToQuery = side == CPSide.Female ? "id0_lastseen" : "id1_lastseen";
-            string sql = $@"
-                SELECT `{columnToQuery}`
+            const string sql = @"
+                SELECT CASE
+                    WHEN `steamid_0` = @steamId THEN `id1_lastseen`
+                    WHEN `steamid_1` = @steamId THEN `id0_lastseen`
+                END AS `spouseLastSeen`
                 FROM `social_couple`
                 WHERE (`steamid_0` = @steamId OR `steamid_1` = @steamId)
                 AND `status` = 1
@@ -250,7 +255,7 @@ public sealed partial class Couple
         }
     }
 
-    private async Task<(ulong? spouseSteamId, string? spouseGender)> GetSpouseSteamIdAndGenderAsync(ulong steamId)
+    private async Task<ulong?> GetSpouseSteamIdAsync(ulong steamId)
     {
         try
         {
@@ -258,15 +263,10 @@ public sealed partial class Couple
             await connection.OpenAsync();
 
             const string sql = @"
-                SELECT
-                    CASE
-                        WHEN `steamid_0` = @steamId THEN `steamid_1`
-                        WHEN `steamid_1` = @steamId THEN `steamid_0`
-                    END AS `spouseSteamId`,
-                    CASE
-                        WHEN `steamid_0` = @steamId THEN '老公'
-                        WHEN `steamid_1` = @steamId THEN '老婆'
-                    END AS `spouseGender`
+                SELECT CASE
+                    WHEN `steamid_0` = @steamId THEN `steamid_1`
+                    WHEN `steamid_1` = @steamId THEN `steamid_0`
+                END AS `spouseSteamId`
                 FROM `social_couple`
                 WHERE (`steamid_0` = @steamId OR `steamid_1` = @steamId)
                 AND `status` = 1
@@ -279,17 +279,15 @@ public sealed partial class Couple
             await using var reader = await cmd.ExecuteReaderAsync();
             if (await reader.ReadAsync())
             {
-                ulong? spouseSteamId = reader.IsDBNull(0) ? null : reader.GetUInt64("spouseSteamId");
-                string? spouseGender = reader.IsDBNull(1) ? null : reader.GetString("spouseGender");
-                return (spouseSteamId, spouseGender);
+                return reader.IsDBNull(0) ? null : reader.GetUInt64("spouseSteamId");
             }
 
-            return (null, null);
+            return null;
         }
         catch (Exception ex)
         {
-            HandleDatabaseError($"Error when retrieving spouse's steamid and gender: {ex.Message}");
-            return (null, null);
+            HandleDatabaseError($"Error when retrieving spouse's steamid: {ex.Message}");
+            return null;
         }
     }
 

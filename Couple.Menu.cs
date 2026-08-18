@@ -94,7 +94,7 @@ public sealed partial class Couple
         }
 
         var spouse = GetClientBySteamId(user.SpouseSteamID);
-        string spouseName = IsValidClient(spouse) ? spouse!.Name : user.SpouseTitle;
+        string spouseName = IsValidClient(spouse) ? spouse!.Name : "伴侣";
 
         var menu = new WorldMenu(DisplayName, "分手确认")
         {

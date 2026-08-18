@@ -37,9 +37,9 @@ public sealed partial class Couple
         return steamId == 0 ? null : _clients.GetGameClient(steamId);
     }
 
-    private static bool IsSpouseDataValid((ulong? spouseSteamId, string? spouseGender) data)
+    private static bool IsSpouseDataValid(ulong? spouseSteamId)
     {
-        return data.spouseSteamId.HasValue && !string.IsNullOrEmpty(data.spouseGender);
+        return spouseSteamId.HasValue;
     }
 
     private static bool CanPersistPlayer(ulong steamId)
@@ -160,7 +160,7 @@ public sealed partial class Couple
             return;
         }
 
-        Task.Run(async () => await UpdateLastSeenAsync(steamId, user.CPSide));
+        Task.Run(async () => await UpdateLastSeenAsync(steamId));
 
         var spouse = GetClientBySteamId(user.SpouseSteamID);
         // spouse is not online
@@ -168,8 +168,7 @@ public sealed partial class Couple
         {
             Task.Run(async () =>
             {
-                CPSide side = user.CPSide == CPSide.Female ? CPSide.Male : CPSide.Female;
-                var lastSeen = await GetLastSeenAsync(user.SpouseSteamID, side);
+                var lastSeen = await GetSpouseLastSeenAsync(steamId);
                 if (!lastSeen.HasValue)
                 {
                     return;
@@ -189,7 +188,7 @@ public sealed partial class Couple
         }
 
         // spouse is online
-        if (!_users.TryGetValue(user.SpouseSteamID, out var spouseUser))
+        if (!_users.ContainsKey(user.SpouseSteamID))
         {
             return;
         }

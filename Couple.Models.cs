@@ -7,10 +7,8 @@ public sealed partial class Couple
         public ulong SteamID { get; set; }
         public ulong RequesterSteamID { get; set; }
         public ulong SpouseSteamID { get; set; }
-        public string SpouseTitle { get; set; } = string.Empty;
         public Status Status { get; set; } = Status.None;
         public int Num { get; set; }
-        public CPSide CPSide { get; set; } = CPSide.Female;
     }
 
     private enum Status
@@ -24,9 +22,4 @@ public sealed partial class Couple
         PendingProposal = 6
     }
 
-    private enum CPSide
-    {
-        Female = 0,
-        Male = 1
-    }
 }
