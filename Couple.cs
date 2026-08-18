@@ -11,7 +11,7 @@ namespace Ins.Couple;
 
 public sealed partial class Couple : IModSharpModule, IClientListener, IGameListener
 {
-    private const double DatabaseRetryIntervalSeconds = 10.0;
+    private const double DatabaseRetryIntervalSeconds = 60.0;
     private const string Tag = "CP";
 
     private readonly IConfiguration _configuration;
@@ -56,7 +56,6 @@ public sealed partial class Couple : IModSharpModule, IClientListener, IGameList
 
         _statusTimer = _modSharp.PushTimer(TimerUpdate, 1.0, GameTimerFlags.Repeatable | GameTimerFlags.StopOnMapEnd);
         _databaseRetryTimer = _modSharp.PushTimer(TryReconnectDatabase, DatabaseRetryIntervalSeconds, GameTimerFlags.Repeatable);
-        _modSharp.InvokeFrameAction(TryReconnectDatabase);
 
         return true;
     }
@@ -84,7 +83,6 @@ public sealed partial class Couple : IModSharpModule, IClientListener, IGameList
     public void OnAllModulesLoaded()
     {
         TryResolveWorldTextMenu(logFailure: true);
-        TryReconnectDatabase();
     }
 
     public void OnLibraryConnected(string name)

@@ -163,69 +163,42 @@ public sealed partial class Couple
         Task.Run(async () => await UpdateLastSeenAsync(steamId, user.CPSide));
 
         var spouse = GetClientBySteamId(user.SpouseSteamID);
+        // spouse is not online
         if (!IsValidClient(spouse))
         {
-            NotifyOfflineSpouse(client!, user);
+            Task.Run(async () =>
+            {
+                CPSide side = user.CPSide == CPSide.Female ? CPSide.Male : CPSide.Female;
+                var lastSeen = await GetLastSeenAsync(user.SpouseSteamID, side);
+                if (!lastSeen.HasValue)
+                {
+                    return;
+                }
+
+                string formattedLastSeen = lastSeen.Value.ToString("yyyy年MM月dd日 HH:mm");
+                _modSharp.InvokeFrameAction(() =>
+                {
+                    if (client is null || !client.IsValid)
+                    {
+                        return;
+                    }
+                    Chat(client, $"你{ChatColor.Pink}伴侣{ChatColor.White}目前不在线哦 上次在线日期为 {ChatColor.Green}{formattedLastSeen}");
+                });
+            });
             return;
         }
 
+        // spouse is online
         if (!_users.TryGetValue(user.SpouseSteamID, out var spouseUser))
         {
             return;
         }
 
-        switch (user.CPSide)
-        {
-            case CPSide.Male:
-                Chat(client!, $"你{ChatColor.Pink}{user.SpouseTitle}{ChatColor.White}目前在线哦,祝你们玩的愉快");
-                Chat(spouse!, $"你{ChatColor.Blue}{spouseUser.SpouseTitle}{ChatColor.White}目前在线哦,祝你们玩的愉快");
-                break;
-            case CPSide.Female:
-                Chat(client!, $"你{ChatColor.Blue}{user.SpouseTitle}{ChatColor.White}目前在线哦,祝你们玩的愉快");
-                Chat(spouse!, $"你{ChatColor.Pink}{spouseUser.SpouseTitle}{ChatColor.White}目前在线哦,祝你们玩的愉快");
-                break;
-        }
+        Chat(client!, $"你{ChatColor.Pink}伴侣{ChatColor.White}目前在线哦,祝你们玩的愉快");
+        Chat(spouse!, $"你{ChatColor.Pink}伴侣{ChatColor.White}目前在线哦,祝你们玩的愉快");
     }
 
-    private void NotifyOfflineSpouse(IGameClient client, User user)
-    {
-        Task.Run(async () =>
-        {
-            CPSide side = user.CPSide == CPSide.Female ? CPSide.Male : CPSide.Female;
-            var lastSeen = await GetLastSeenAsync(user.SpouseSteamID, side);
-            if (!lastSeen.HasValue)
-            {
-                return;
-            }
-
-            string formattedLastSeen = lastSeen.Value.ToString("yyyy年MM月dd日 HH:mm");
-            _modSharp.InvokeFrameAction(() =>
-            {
-                switch (user.CPSide)
-                {
-                    case CPSide.Male:
-                        Chat(client, $"你{ChatColor.Pink}{user.SpouseTitle}{ChatColor.White}目前不在线哦 上次在线日期为 {ChatColor.Green}{formattedLastSeen}");
-                        break;
-                    case CPSide.Female:
-                        Chat(client, $"你{ChatColor.Blue}{user.SpouseTitle}{ChatColor.White}目前不在线哦 上次在线日期为 {ChatColor.Green}{formattedLastSeen}");
-                        break;
-                }
-            });
-        });
-    }
-
-    private string OfflineSpouseMessage(User user, string suffix)
-    {
-        string color = user.CPSide == CPSide.Male ? ChatColor.Pink : ChatColor.Blue;
-        return $"你{color}{user.SpouseTitle}{ChatColor.White}{suffix}";
-    }
-
-    private void PushTimer(Action action, double delay)
-    {
-        _modSharp.PushTimer(action, delay, GameTimerFlags.StopOnMapEnd);
-    }
-
-    private void ScheduleDisconnect(IGameClient client, ulong steamId)
+    private void KickPlayer(IGameClient client, ulong steamId, double num)
     {
         PushTimer(() =>
         {
@@ -235,7 +208,12 @@ public sealed partial class Couple
             {
                 _clients.KickClient(client, "Couple status changed", NetworkDisconnectionReason.Kicked);
             }
-        }, 5.0);
+        }, num);
+    }
+
+    private void PushTimer(Action action, double delay)
+    {
+        _modSharp.PushTimer(action, delay, GameTimerFlags.StopOnMapEnd);
     }
 
     private void StopTimer(ref Guid timer)
@@ -251,11 +229,6 @@ public sealed partial class Couple
     private void Chat(IGameClient client, string message, bool usePrefix = true)
     {
         client.Print(HudPrintChannel.Chat, ChatPrefix + message);
-    }
-
-    private void Reply(IGameClient client, string message)
-    {
-        Chat(client, message);
     }
 
     private void ChatAll(string message)

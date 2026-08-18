@@ -47,12 +47,13 @@ public sealed partial class Couple
                 `id0_lastseen` TIMESTAMP NULL DEFAULT NULL COMMENT '女方上次游玩时间',
                 `id1_lastseen` TIMESTAMP NULL DEFAULT NULL COMMENT '男方上次游玩时间',
                 `cooldown_until` TIMESTAMP NULL DEFAULT NULL COMMENT '冷静期结束时间'
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;", connection);
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;", connection);
             await cmd.ExecuteNonQueryAsync();
         }
         catch (Exception ex)
         {
             EchoWarning($"There was an error when creating database: {ex.Message}");
+            throw;
         }
     }
 
@@ -110,14 +111,24 @@ public sealed partial class Couple
 
             const string sql = @"
                 INSERT INTO `social_couple` (`steamid_0`, `steamid_1`, `created_at`, `status`)
-                VALUES (@steamId0, @steamId1, CURRENT_TIMESTAMP, 1);";
+                SELECT @steamId0, @steamId1, CURRENT_TIMESTAMP, 1
+                FROM DUAL
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM `social_couple`
+                    WHERE `status` = 1
+                      AND (
+                          `steamid_0` IN (@steamId0, @steamId1)
+                          OR `steamid_1` IN (@steamId0, @steamId1)
+                      )
+                );";
             await using var cmd = new MySqlCommand(sql, connection);
             cmd.Parameters.AddWithValue("@steamId0", steamId0);
             cmd.Parameters.AddWithValue("@steamId1", steamId1);
             int rowsAffected = await cmd.ExecuteNonQueryAsync();
             if (rowsAffected == 0)
             {
-                EchoWarning("No eligible players found to add a couple.");
+                EchoWarning("Cannot add a couple because one player already has an active relationship.");
                 return false;
             }
 
@@ -125,7 +136,7 @@ public sealed partial class Couple
         }
         catch (Exception ex)
         {
-            EchoWarning($"Error when adding a couple: {ex.Message}");
+            HandleDatabaseError($"Error when adding a couple: {ex.Message}");
             return false;
         }
     }
@@ -163,7 +174,7 @@ public sealed partial class Couple
         }
         catch (Exception ex)
         {
-            EchoWarning($"Error when breaking up a couple: {ex.Message}");
+            HandleDatabaseError($"Error when breaking up a couple: {ex.Message}");
             return false;
         }
     }
@@ -201,7 +212,7 @@ public sealed partial class Couple
         }
         catch (Exception ex)
         {
-            EchoWarning($"Error when updating last seen time: {ex.Message}");
+            HandleDatabaseError($"Error when updating last seen time: {ex.Message}");
         }
     }
 
@@ -218,6 +229,7 @@ public sealed partial class Couple
                 FROM `social_couple`
                 WHERE (`steamid_0` = @steamId OR `steamid_1` = @steamId)
                 AND `status` = 1
+                ORDER BY `created_at` DESC, `id` DESC
                 LIMIT 1;";
 
             await using var cmd = new MySqlCommand(sql, connection);
@@ -233,7 +245,7 @@ public sealed partial class Couple
         }
         catch (Exception ex)
         {
-            EchoWarning($"Error when retrieving last seen time: {ex.Message}");
+            HandleDatabaseError($"Error when retrieving last seen time: {ex.Message}");
             return null;
         }
     }
@@ -257,7 +269,9 @@ public sealed partial class Couple
                     END AS `spouseGender`
                 FROM `social_couple`
                 WHERE (`steamid_0` = @steamId OR `steamid_1` = @steamId)
-                AND `status` = 1;";
+                AND `status` = 1
+                ORDER BY `created_at` DESC, `id` DESC
+                LIMIT 1;";
 
             await using var cmd = new MySqlCommand(sql, connection);
             cmd.Parameters.AddWithValue("@steamId", steamId);
@@ -274,7 +288,7 @@ public sealed partial class Couple
         }
         catch (Exception ex)
         {
-            EchoWarning($"Error when retrieving spouse's steamid and gender: {ex.Message}");
+            HandleDatabaseError($"Error when retrieving spouse's steamid and gender: {ex.Message}");
             return (null, null);
         }
     }
@@ -287,7 +301,7 @@ public sealed partial class Couple
             await connection.OpenAsync();
 
             const string sql = @"
-                SELECT `cooldown_until`
+                SELECT (`cooldown_until` IS NULL OR `cooldown_until` <= CURRENT_TIMESTAMP) AS `canMarryAgain`
                 FROM `social_couple`
                 WHERE (`steamid_0` = @steamId OR `steamid_1` = @steamId)
                   AND `status` = 0
@@ -300,16 +314,21 @@ public sealed partial class Couple
             await using var reader = await cmd.ExecuteReaderAsync();
             if (await reader.ReadAsync())
             {
-                DateTime? cooldownUntil = reader.IsDBNull(0) ? null : reader.GetDateTime(0);
-                return cooldownUntil == null || cooldownUntil <= DateTime.UtcNow;
+                return reader.GetBoolean("canMarryAgain");
             }
 
             return true;
         }
         catch (Exception ex)
         {
-            EchoWarning($"Error when checking cooldown: {ex.Message}");
+            HandleDatabaseError($"Error when checking cooldown: {ex.Message}");
             return false;
         }
+    }
+
+    private void HandleDatabaseError(string message)
+    {
+        _isDbConnected = false;
+        EchoWarning(message);
     }
 }

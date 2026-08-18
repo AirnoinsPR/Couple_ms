@@ -18,21 +18,21 @@ public sealed partial class Couple
     {
         if (!TryGetWorldTextMenu(out var worldTextMenu))
         {
-            Reply(client, $"{ChatColor.Red}CP菜单暂不可用,请稍后再试");
+            Chat(client, $"{ChatColor.Red}CP菜单暂不可用,请稍后再试");
             return;
         }
 
         ulong steamId = client.SteamId.AsPrimitive();
         if (!_users.TryGetValue(steamId, out var user))
         {
-            Reply(client, $"{ChatColor.Red}正在加载你的CP数据,请稍后再试");
+            Chat(client, $"{ChatColor.Red}正在加载你的CP数据,请稍后再试");
             return;
         }
 
         var menu = BuildCoupleMenu(client, user);
         if (!worldTextMenu.Show(client, menu))
         {
-            Reply(client, $"{ChatColor.Red}CP菜单打开失败");
+            Chat(client, $"{ChatColor.Red}CP菜单打开失败");
         }
     }
 
@@ -171,7 +171,7 @@ public sealed partial class Couple
         var spouse = GetClientBySteamId(user.SpouseSteamID);
         bool spouseOnline = IsValidClient(spouse);
 
-        menu.AddDisabledItem($"当前状态: 已有伴侣({user.SpouseTitle})");
+        menu.AddDisabledItem($"当前状态: 已有伴侣");
         menu.AddDisabledItem(spouseOnline ? $"伴侣在线: {spouse!.Name}" : "伴侣当前不在线");
 
         if (spouseOnline)
